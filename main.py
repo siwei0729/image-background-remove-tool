@@ -22,6 +22,11 @@ License:
 """
 import argparse
 import os
+import time
+from os import listdir
+from os.path import isfile, join
+
+import cv2
 import tqdm
 import logging
 from libs.strings import *
@@ -89,8 +94,8 @@ def process(input_path, output_path, model_name="u2net",
     :param postprocessing_method_name: Method for image preprocessing
     :param preprocessing_method_name: Method for image post-processing
     """
-    if input_path is None or output_path is None:
-        raise Exception("Bad parameters! Please specify input path and output path.")
+    # if input_path is None or output_path is None:
+    #     raise Exception("Bad parameters! Please specify input path and output path.")
 
     model = model_detect(model_name)  # Load model
     if not model:
@@ -101,27 +106,54 @@ def process(input_path, output_path, model_name="u2net",
         model = model_detect(model_name)  # Load model
     preprocessing_method = preprocessing.method_detect(preprocessing_method_name)
     postprocessing_method = postprocessing.method_detect(postprocessing_method_name)
-    wmode = __work_mode__(input_path)  # Get work mode
-    if wmode == "file":  # File work mode
-        image = model.process_image(input_path, preprocessing_method, postprocessing_method)
-        __save_image_file__(image, os.path.basename(input_path), output_path, wmode)
-    elif wmode == "dir":  # Dir work mode
-        # Start process
-        files = os.listdir(input_path)
-        for file in tqdm.tqdm(files, ascii=True, desc='Remove Background', unit='image'):
-            file_path = os.path.join(input_path, file)
-            image = model.process_image(file_path, preprocessing_method, postprocessing_method)
-            __save_image_file__(image, file, output_path, wmode)
-    else:
-        raise Exception("Bad input parameter! Please indicate the correct path to the file or folder.")
+
+    folder = "images"
+    if not os.path.exists(folder):
+        os.mkdir(folder)
+
+    print("img bg rm service is running!")
+    while True:
+        time.sleep(0.5)
+        img_files = [f for f in listdir(folder) if isfile(join(folder, f)) and f.endswith("jpg")]
+        if len(img_files) == 0:
+            continue
+
+        img_files.sort()
+        # has images to rm bg
+        for img in img_files:
+            input_path = join(folder, img)
+            output_path = join(folder, img.replace("jpg", "png"))
+            img = cv2.imread(input_path)
+            if img is None:
+                # check valid img file
+                continue
+
+            print(f"processing ", input_path)
+            image = model.process_image(input_path, preprocessing_method, postprocessing_method)
+            __save_image_file__(image, os.path.basename(input_path), output_path, "file")
+            os.remove(input_path)
+
+            # wmode = __work_mode__(input_path)  # Get work mode
+    # if wmode == "file":  # File work mode
+    #     image = model.process_image(input_path, preprocessing_method, postprocessing_method)
+    #     __save_image_file__(image, os.path.basename(input_path), output_path, wmode)
+    # elif wmode == "dir":  # Dir work mode
+    #     # Start process
+    #     files = os.listdir(input_path)
+    #     for file in tqdm.tqdm(files, ascii=True, desc='Remove Background', unit='image'):
+    #         file_path = os.path.join(input_path, file)
+    #         image = model.process_image(file_path, preprocessing_method, postprocessing_method)
+    #         __save_image_file__(image, file, output_path, wmode)
+    # else:
+    #     raise Exception("Bad input parameter! Please indicate the correct path to the file or folder.")
 
 
 def cli():
     """CLI"""
     parser = argparse.ArgumentParser(description=DESCRIPTION, usage=ARGS_HELP)
-    parser.add_argument('-i', required=True,
+    parser.add_argument('-i', required=False,
                         help="Path to input file or dir.", action="store", dest="input_path")
-    parser.add_argument('-o', required=True,
+    parser.add_argument('-o', required=False,
                         help="Path to output file or dir.", action="store", dest="output_path")
     parser.add_argument('-m', required=False,
                         help="Model name. Can be {} . U2NET is better to use.".format(MODELS_NAMES),
